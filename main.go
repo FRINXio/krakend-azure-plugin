@@ -20,6 +20,7 @@ type registerer string
 var clientId string
 var clientSecret string
 var jwtHeaderName string
+var jwtValuePrefix string
 var groupUpdateIntervalMinutes float64
 
 func (r registerer) RegisterClients(f func(
@@ -37,7 +38,7 @@ func (r registerer) registerClients(ctx context.Context, extra map[string]interf
 			return
 		}
 
-		jwtToken = strings.Split(jwtToken, "Bearer ")[1]
+		jwtToken = jwtToken[len(jwtValuePrefix):]
 
 		claims := jwt.MapClaims{}
 
@@ -147,6 +148,7 @@ func init() {
 	clientId = os.Getenv("AZURE_KRAKEND_PLUGIN_CLIENT_ID")
 	clientSecret = os.Getenv("AZURE_KRAKEND_PLUGIN_CLIENT_SECRET")
 	jwtHeaderName = os.Getenv("AZURE_KRAKEND_PLUGIN_JWT_HEADER_NAME")
+	jwtValuePrefix = os.Getenv("AZURE_KRAKEND_PLUGIN_JWT_VALUE_PREFIX")
 	groupUpdate := os.Getenv("AZURE_KRAKEND_PLUGIN_GROUP_UPDATE_IN_MINUTES")
 
 	if jwtHeaderName == "" {

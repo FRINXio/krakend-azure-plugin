@@ -1,0 +1,55 @@
+{
+    "version": 2,
+    "name": "krakend ftw",
+    "port": 8080,
+    "cache_ttl": "3600s",
+    "timeout": "3s",
+    "plugin": {
+        "pattern": ".so",
+        "folder": "/path/to/plugins"
+    },
+    "extra_config": {
+        "github_com/devopsfaith/krakend-gologging": {
+            "level": "WARNING",
+            "prefix": "[KRAKEND]",
+            "syslog": false,
+            "stdout": true
+        }
+    },
+    "endpoints": [
+        {
+            "extra_config": {
+                "github.com/devopsfaith/krakend-jose/validator": {
+                    "alg": "RS256",
+                    "jwk-url": "https://login.microsoftonline.com/common/discovery/v2.0/keys"
+                },
+                "github.com/devopsfaith/krakend-cel": [
+                    {
+                        "check_expr": "JWT.tid.matches('8379e38f-b9ed-4168-8a1b-69be764c9750') || JWT.tid.matches('6b422a8e-f6fe-46ba-ba4b-1e8996f88382')"
+                    }
+                ]
+            },
+            "endpoint": "/",
+            "method": "GET",
+            "output_encoding": "no-op",
+            "headers_to_pass": [
+                "*"
+            ],
+            "backend": [
+                {
+                    "encoding": "no-op",
+                    "sd": "static",
+                    "disable_host_sanitize": false,
+                    "extra_config": {
+                        "github.com/devopsfaith/krakend/transport/http/client/executor": {
+                            "name": "krakend-azure-plugin"
+                        }
+                    },
+                    "host": [
+                        "http://localhost:8081"
+                    ]
+                }
+            ]
+        }
+    ]
+}
