@@ -73,9 +73,12 @@ if the value of the JWT does not immediately start, but has some prefix for exam
 
     Auth: Bearer eyf03XAiOiJK.....3jdS3d
 
-then we have to set AZURE_KRAKEND_PLUGIN_JWT_VALUE_PREFIX to "Bearer ". **NOTE**: the extra space 
-at the end of "Bearer " is needed in this case because the value of JWT starts **after** the
-string "Bearer " (the string is case-insensitive, "BEARER " or "BeArEr " would work properly as well).
+then we have to set AZURE_KRAKEND_PLUGIN_JWT_VALUE_PREFIX to "Bearer_". 
+
+**NOTE**: the extra underscore at the end "Bearer_" represents the
+space character (golang is unable to properly count space characters
+in strings) and is needed in this case because the value of JWT starts **after** the
+string "Bearer&lt;space&gt;" (the string is case-insensitive, "BEARER_" or "BeArEr_" would work too).
 
 ### 3.3. Azured AD refresh interval 
 

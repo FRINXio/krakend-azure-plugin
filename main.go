@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 var ClientRegisterer = registerer("krakend-azure-plugin")
@@ -35,16 +36,22 @@ func (r registerer) registerClients(ctx context.Context, extra map[string]interf
 		jwtToken := req.Header.Get(jwtHeaderName)
 
 		if jwtToken == "" {
+			fmt.Fprintf(os.Stdout, "WARN: JWT header is not present, all headers in request: %+v", req.Header)
 			return
 		}
 
-		jwtToken = jwtToken[len(jwtValuePrefix):]
+		jwtToken = jwtToken[utf8.RuneCountInString(jwtValuePrefix):]
 
 		claims := jwt.MapClaims{}
 
 		// we don't check for err in ParseWithClaims, because err is always != nil when keyFunc
 		// not provided (keyfunc needed only to verify signature, which we know is ok)
 		jwt.ParseWithClaims(jwtToken, claims, nil)
+
+		if claims["tid"] == nil {
+			fmt.Fprintf(os.Stderr, "ERROR: unable to get tenant-id, claim 'tid' is empty. Claims are: %+v \n", claims)
+			return
+		}
 
 		if val, ok := queriedTenants[claims["tid"].(string)]; !ok {
 			updateTenantGroups(claims["tid"].(string))
