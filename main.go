@@ -10,13 +10,21 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 )
 
 var ClientRegisterer = registerer("krakend-azure-plugin")
-var groupMapping = make(map[string]string)
-var queriedTenants = make(map[string]time.Time)
+
+type GroupMapping struct {
+	sync.RWMutex
+	groupMapping map[string]string
+	queriedTenants map[string]time.Time
+}
+
+var groupMapping = &GroupMapping{}
+
 type registerer string
 var clientId string
 var clientSecret string
@@ -53,19 +61,22 @@ func (r registerer) registerClients(ctx context.Context, extra map[string]interf
 			return
 		}
 
-		if val, ok := queriedTenants[claims["tid"].(string)]; !ok {
+		groupMapping.Lock()
+		if val, ok := groupMapping.queriedTenants[claims["tid"].(string)]; !ok {
 			updateTenantGroups(claims["tid"].(string))
 		} else {
 			if time.Now().Sub(val).Minutes() > groupUpdateIntervalMinutes {
-				delete(queriedTenants, claims["tid"].(string)) // on the next request we will refresh tenant groups
+				delete(groupMapping.queriedTenants, claims["tid"].(string)) // on the next request we will refresh tenant groups
 			}
 		}
+		groupMapping.Unlock()
 
 		groupsValue := ""
 
+		groupMapping.RLock()
 		if claims["groups"] != nil {
 			for _, g := range claims["groups"].([]interface{}) {
-				if val, ok := groupMapping[g.(string)]; ok {
+				if val, ok := groupMapping.groupMapping[g.(string)]; ok {
 					if groupsValue == "" {
 						groupsValue = groupsValue + val
 					} else {
@@ -74,6 +85,7 @@ func (r registerer) registerClients(ctx context.Context, extra map[string]interf
 				}
 			}
 		}
+		groupMapping.RUnlock()
 
 		req.Header.Add("x-tenant-id", strings.ReplaceAll(claims["tid"].(string), "-", "_") )
 
@@ -145,13 +157,15 @@ func updateTenantGroups(tenantId string) {
 	}
 
 	for _, g := range groups {
-		groupMapping[g.ID] = g.DisplayName
+		groupMapping.groupMapping[g.ID] = g.DisplayName
 	}
 
-	queriedTenants[tenantId] = time.Now()
+	groupMapping.queriedTenants[tenantId] = time.Now()
 }
 
 func init() {
+	groupMapping.groupMapping = make(map[string]string)
+	groupMapping.queriedTenants = make(map[string]time.Time)
 	clientId = os.Getenv("AZURE_KRAKEND_PLUGIN_CLIENT_ID")
 	clientSecret = os.Getenv("AZURE_KRAKEND_PLUGIN_CLIENT_SECRET")
 	jwtHeaderName = os.Getenv("AZURE_KRAKEND_PLUGIN_JWT_HEADER_NAME")
