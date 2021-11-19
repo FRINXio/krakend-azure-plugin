@@ -73,12 +73,7 @@ if the value of the JWT does not immediately start, but has some prefix for exam
 
     Auth: Bearer eyf03XAiOiJK.....3jdS3d
 
-then we have to set AZURE_KRAKEND_PLUGIN_JWT_VALUE_PREFIX to "Bearer_". 
-
-**NOTE**: the extra underscore at the end "Bearer_" represents the
-space character (golang is unable to properly count space characters
-in strings) and is needed in this case because the value of JWT starts **after** the
-string "Bearer&lt;space&gt;" (the string is case-insensitive, "BEARER_" or "BeArEr_" would work too).
+then we have to set AZURE_KRAKEND_PLUGIN_JWT_VALUE_PREFIX to "Bearer". 
 
 ### 3.3. Azured AD refresh interval 
 
@@ -109,10 +104,10 @@ Plugins are configured in the plugin section e.g.:
     
 ### 4.2. Settings plugin for endpoint
 
-Setting the plugin in the config is done by appending the following JSON snippet:
+Setting the plugin in the config is done by appending the following JSON snippet to root of config file:
 
     "extra_config": {
-        "github.com/devopsfaith/krakend/transport/http/client/executor": {
+        "github_com/devopsfaith/krakend/transport/http/server/handler": {
             "name": "krakend-azure-plugin"
         }
     }    
