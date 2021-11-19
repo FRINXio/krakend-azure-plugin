@@ -1,21 +1,21 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"github.com/dgrijalva/jwt-go"
-	"github.com/open-networks/go-msgraph"
-	"io/ioutil"
-	"net/http"
-	"os"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-	"unicode/utf8"
+	 "context"
+	 "fmt"
+	 "github.com/dgrijalva/jwt-go"
+	 "github.com/open-networks/go-msgraph"
+	 _ "io/ioutil"
+	 "net/http"
+	 "os"
+	 "strconv"
+	 "strings"
+	 "sync"
+	 "time"
+	 "unicode/utf8"
 )
 
-var ClientRegisterer = registerer("krakend-azure-plugin")
+var HandlerRegisterer = registerer("krakend-azure-plugin")
 
 type GroupMapping struct {
 	sync.RWMutex
@@ -32,109 +32,87 @@ var jwtHeaderName string
 var jwtValuePrefix string
 var groupUpdateIntervalMinutes float64
 
-func (r registerer) RegisterClients(f func(
+
+func (r registerer) RegisterHandlers(f func(
 	name string,
-	handler func(context.Context, map[string]interface{}) (http.Handler, error),
+	handler func(
+		context.Context,
+		map[string]interface{},
+		http.Handler) (http.Handler, error),
 )) {
-	f(string(r), r.registerClients)
+	f(string(r), r.registerHandlers)
 }
 
-func (r registerer) registerClients(ctx context.Context, extra map[string]interface{}) (http.Handler, error) {
-	handlerFunc := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+func (r registerer) registerHandlers(ctx context.Context, extra map[string]interface{}, handler http.Handler) (http.Handler, error) {	
+
+	handlerFunc :=  http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		jwtToken := req.Header.Get(jwtHeaderName)
 
-		if jwtToken == "" {
-			fmt.Fprintf(os.Stdout, "WARN: JWT header is not present, all headers in request: %+v", req.Header)
-			return
-		}
+		if jwtToken != "" {
+			
+			jwtToken = strings.ReplaceAll(jwtToken, " ", "")
+			jwtToken = jwtToken[utf8.RuneCountInString(jwtValuePrefix):]
 
-		jwtToken = jwtToken[utf8.RuneCountInString(jwtValuePrefix):]
+			claims := jwt.MapClaims{}
 
-		claims := jwt.MapClaims{}
+			// we don't check for err in ParseWithClaims, because err is always != nil when keyFunc
+			// not provided (keyfunc needed only to verify signature, which we know is ok)
+			jwt.ParseWithClaims(jwtToken, claims, nil)
 
-		// we don't check for err in ParseWithClaims, because err is always != nil when keyFunc
-		// not provided (keyfunc needed only to verify signature, which we know is ok)
-		jwt.ParseWithClaims(jwtToken, claims, nil)
-
-		if claims["tid"] == nil {
-			fmt.Fprintf(os.Stderr, "ERROR: unable to get tenant-id, claim 'tid' is empty. Claims are: %+v \n", claims)
-			return
-		}
-
-		groupMapping.Lock()
-		if val, ok := groupMapping.queriedTenants[claims["tid"].(string)]; !ok {
-			updateTenantGroups(claims["tid"].(string))
-		} else {
-			if time.Now().Sub(val).Minutes() > groupUpdateIntervalMinutes {
-				delete(groupMapping.queriedTenants, claims["tid"].(string)) // on the next request we will refresh tenant groups
-			}
-		}
-		groupMapping.Unlock()
-
-		groupsValue := ""
-
-		groupMapping.RLock()
-		if claims["groups"] != nil {
-			for _, g := range claims["groups"].([]interface{}) {
-				if val, ok := groupMapping.groupMapping[g.(string)]; ok {
-					if groupsValue == "" {
-						groupsValue = groupsValue + val
-					} else {
-						groupsValue = groupsValue + ", " + val
+			if claims["tid"] != nil {
+				groupMapping.Lock()
+				if val, ok := groupMapping.queriedTenants[claims["tid"].(string)]; !ok {
+					updateTenantGroups(claims["tid"].(string))
+				} else {
+					if time.Now().Sub(val).Minutes() > groupUpdateIntervalMinutes {
+						delete(groupMapping.queriedTenants, claims["tid"].(string)) // on the next request we will refresh tenant groups
 					}
 				}
+				groupMapping.Unlock()
+		
+				groupsValue := ""
+		
+				groupMapping.RLock()
+				if claims["groups"] != nil {
+					for _, g := range claims["groups"].([]interface{}) {
+						if val, ok := groupMapping.groupMapping[g.(string)]; ok {
+							if groupsValue == "" {
+								groupsValue = groupsValue + val
+							} else {
+								groupsValue = groupsValue + "," + val
+							}
+						}
+					}
+				}
+				groupMapping.RUnlock()
+
+				req.Header.Add("x-tenant-id", strings.ReplaceAll(claims["tid"].(string), "-", "_") )
+
+				if groupsValue != "" {
+					req.Header.Add("x-auth-user-groups", groupsValue)
+				}
+		
+				var userIdentification string
+		
+				if claims["email"] != nil {
+					userIdentification = claims["email"].(string)
+				} else if claims["verified_primary_email"] != nil {
+					userIdentification = claims["verified_primary_email"].(string)
+				} else if claims["preferred_username"] != nil {
+					userIdentification = claims["preferred_username"].(string)
+				} else if claims["oid"] != nil {
+					userIdentification = claims["oid"].(string)
+				} else {
+					userIdentification = "unknown"
+				}
+		
+				req.Header.Add("from", userIdentification)
+
 			}
 		}
-		groupMapping.RUnlock()
 
-		req.Header.Add("x-tenant-id", strings.ReplaceAll(claims["tid"].(string), "-", "_") )
+		handler.ServeHTTP(w, req)
 
-		if groupsValue != "" {
-			req.Header.Add("x-auth-user-groups", groupsValue)
-		}
-
-		var userIdentification string
-
-		if claims["email"] != nil {
-			userIdentification = claims["email"].(string)
-		} else if claims["verified_primary_email"] != nil {
-			userIdentification = claims["verified_primary_email"].(string)
-		} else if claims["oid"] != nil {
-			userIdentification = claims["oid"].(string)
-		} else {
-			userIdentification = "unknown"
-		}
-
-		req.Header.Add("from", userIdentification)
-
-		response, err := http.DefaultClient.Do(req)
-
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "ERROR: unable to connect to backend, error: %v \n", err)
-			w.WriteHeader(500)
-			return
-		}
-
-		defer response.Body.Close()
-
-		bytes, err := ioutil.ReadAll(response.Body)
-
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "ERROR: unable to process response from backend, error: %v \n", err)
-		}
-
-		w.WriteHeader(response.StatusCode)
-		bytesWritten, err := w.Write(bytes)
-
-		if bytesWritten != len(bytes) || err != nil {
-			fmt.Fprintf(os.Stderr, "ERROR: unable to read the response from backend, error: %v bytes from backend %d bytes written %d \n", err, len(bytes), bytesWritten)
-		}
-
-		for key, vals := range response.Header {
-			for _, val := range vals {
-				w.Header().Add(key, val)
-			}
-		}
 	})
 
 	return handlerFunc, nil
