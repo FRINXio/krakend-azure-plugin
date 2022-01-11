@@ -59,7 +59,20 @@ func (r registerer) registerHandlers(ctx context.Context, extra map[string]inter
 			// not provided (keyfunc needed only to verify signature, which we know is ok)
 			jwt.ParseWithClaims(jwtToken, claims, nil)
 
+			rolesValue := ""
+
 			if claims["tid"] != nil {
+
+				if claims["roles"] != nil {
+					for _, role := range claims["roles"].([]interface{}) {
+						if rolesValue == "" {
+							rolesValue = rolesValue + role.(string)
+						} else {
+							rolesValue = rolesValue + "," + role.(string)
+						}
+					}
+				}
+
 				groupMapping.Lock()
 				if val, ok := groupMapping.queriedTenants[claims["tid"].(string)]; !ok {
 					updateTenantGroups(claims["tid"].(string))
@@ -90,6 +103,10 @@ func (r registerer) registerHandlers(ctx context.Context, extra map[string]inter
 
 				if groupsValue != "" {
 					req.Header.Add("x-auth-user-groups", groupsValue)
+				}
+
+				if rolesValue != "" {
+					req.Header.Add("x-auth-user-roles", rolesValue)
 				}
 		
 				var userIdentification string
