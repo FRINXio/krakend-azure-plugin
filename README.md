@@ -15,6 +15,10 @@ For example a JWT cookie with the following claims:
     "7155f23e-e240-421b-8aa0-08902da12475",
     "b90br4ab-4dd1-435a-8b1d-3cef546f3c33"
     ],
+    "roles": [
+     "Read.All",
+     "Write.All"
+    ],
     "ipaddr": "77.129.25.11", 
     "tid": "1b422a8e-f6fe-46ba-bd4b-1e8996f88282",
     "oid": "10ee82dd-020a-38ff-8e43-6a29abe032fe",
@@ -24,6 +28,7 @@ is transformed into the following request headers:
 
     From: 10ee82dd-020a-38ff-8e43-6a29abe032fe
     X-Auth-User-Groups: testgroup1, testgroup2, testgroup3
+    X-Auth-User-Roles: Read.All, Write.All    
     X-Tenant-Id: 8379e38f_b9ed_4168_8a1b_69be764c9750
     
 The transformations that take place are:
