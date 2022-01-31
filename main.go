@@ -31,6 +31,7 @@ var clientSecret string
 var jwtHeaderName string
 var jwtValuePrefix string
 var groupUpdateIntervalMinutes float64
+var groupTransformDisable string
 
 
 func (r registerer) RegisterHandlers(f func(
@@ -60,6 +61,7 @@ func (r registerer) registerHandlers(ctx context.Context, extra map[string]inter
 			jwt.ParseWithClaims(jwtToken, claims, nil)
 
 			rolesValue := ""
+			groupsValue := ""
 
 			if claims["tid"] != nil {
 
@@ -72,32 +74,35 @@ func (r registerer) registerHandlers(ctx context.Context, extra map[string]inter
 						}
 					}
 				}
+				
+				if groupTransformDisable != "true" {
 
-				groupMapping.Lock()
-				if val, ok := groupMapping.queriedTenants[claims["tid"].(string)]; !ok {
-					updateTenantGroups(claims["tid"].(string))
-				} else {
-					if time.Now().Sub(val).Minutes() > groupUpdateIntervalMinutes {
-						delete(groupMapping.queriedTenants, claims["tid"].(string)) // on the next request we will refresh tenant groups
+					groupMapping.Lock()
+					if val, ok := groupMapping.queriedTenants[claims["tid"].(string)]; !ok {
+						updateTenantGroups(claims["tid"].(string))
+					} else {
+						if time.Now().Sub(val).Minutes() > groupUpdateIntervalMinutes {
+							delete(groupMapping.queriedTenants, claims["tid"].(string)) // on the next request we will refresh tenant groups
+						}
 					}
-				}
-				groupMapping.Unlock()
-		
-				groupsValue := ""
-		
-				groupMapping.RLock()
-				if claims["groups"] != nil {
-					for _, g := range claims["groups"].([]interface{}) {
-						if val, ok := groupMapping.groupMapping[g.(string)]; ok {
-							if groupsValue == "" {
-								groupsValue = groupsValue + val
-							} else {
-								groupsValue = groupsValue + "," + val
+					groupMapping.Unlock()
+			
+			
+					groupMapping.RLock()
+					if claims["groups"] != nil {
+						for _, g := range claims["groups"].([]interface{}) {
+							if val, ok := groupMapping.groupMapping[g.(string)]; ok {
+								if groupsValue == "" {
+									groupsValue = groupsValue + val
+								} else {
+									groupsValue = groupsValue + "," + val
+								}
 							}
 						}
 					}
+					groupMapping.RUnlock()
+
 				}
-				groupMapping.RUnlock()
 
 				req.Header.Add("x-tenant-id", strings.ReplaceAll(claims["tid"].(string), "-", "_") )
 
@@ -166,6 +171,8 @@ func init() {
 	jwtHeaderName = os.Getenv("AZURE_KRAKEND_PLUGIN_JWT_HEADER_NAME")
 	jwtValuePrefix = os.Getenv("AZURE_KRAKEND_PLUGIN_JWT_VALUE_PREFIX")
 	groupUpdate := os.Getenv("AZURE_KRAKEND_PLUGIN_GROUP_UPDATE_IN_MINUTES")
+	groupTransformDisable = os.Getenv("AZURE_KRAKEND_PLUGIN_GROUP_DISABLE")
+
 
 	if jwtHeaderName == "" {
 		jwtHeaderName = "Authorization"
@@ -185,10 +192,16 @@ func init() {
 		}
 	}
 
-	if clientId == "" || clientSecret == "" {
-		fmt.Fprintf(os.Stderr,"ERROR: Unable to retrieve plugin credentials: AZURE_KRAKEND_PLUGIN_CLIENT_ID or AZURE_KRAKEND_PLUGIN_CLIENT_SECRET missing \n")
+	if groupTransformDisable != "true" {
+
+		if clientId == "" || clientSecret == "" {
+			fmt.Fprintf(os.Stderr,"ERROR: Unable to retrieve plugin credentials: AZURE_KRAKEND_PLUGIN_CLIENT_ID or AZURE_KRAKEND_PLUGIN_CLIENT_SECRET missing \n")
+		} else {
+			fmt.Fprintf(os.Stdout,"INFO: azure-groups-plugin loaded successfully (JWT header name is \"%s\" and group refresh interval %v minutes ) \n", jwtHeaderName, groupUpdateIntervalMinutes)
+		}
+
 	} else {
-		fmt.Fprintf(os.Stdout,"INFO: azure-groups-plugin loaded successfully (JWT header name is \"%s\" and group refresh interval %v minutes ) \n", jwtHeaderName, groupUpdateIntervalMinutes)
+		fmt.Fprintf(os.Stdout,"INFO: group transformation is disabled")
 	}
 }
 
