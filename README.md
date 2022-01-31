@@ -39,6 +39,7 @@ present then the *verified_primary_email* claim and if also not present
 then the *oid* claim (which is mandatory in Azure AD i.e. always present)
 3. dashes in *tid* claim (tenant-id) are replaced by underscores
 
+
 ## 2. Building the plugin
 
 The plugin is built using the command:
@@ -47,14 +48,18 @@ The plugin is built using the command:
 
 ## 3. Configuration of plugin
 
+Group transformation can be disabled via AZURE_KRAKEND_PLUGIN_GROUP_DISABLE.
+By default is enabled. 
+
 This section describes the configuration of the plugin. In order to configure the plugin 
 the following environment variables should be set:
 
-    AZURE_KRAKEND_PLUGIN_CLIENT_ID //mandatory
-    AZURE_KRAKEND_PLUGIN_CLIENT_SECRET //mandatory
+    AZURE_KRAKEND_PLUGIN_CLIENT_ID //mandatory if AZURE_KRAKEND_PLUGIN_GROUP_DISABLE is not set to true 
+    AZURE_KRAKEND_PLUGIN_CLIENT_SECRET //mandatory if AZURE_KRAKEND_PLUGIN_GROUP_DISABLE is not set to true
     AZURE_KRAKEND_PLUGIN_JWT_VALUE_PREFIX //optional, default value is ""
     AZURE_KRAKEND_PLUGIN_JWT_HEADER_NAME //optional, default is 'Authorization'
     AZURE_KRAKEND_PLUGIN_GROUP_UPDATE_IN_MINUTES //optional, default is 120 minutes
+    AZURE_KRAKEND_PLUGIN_GROUP_DISABLE  // optional, disable group transformation
 
 ### 3.1. Plugin client configuration
   
