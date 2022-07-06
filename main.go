@@ -1,38 +1,39 @@
 package main
 
 import (
-	 "context"
-	 "fmt"
-	 "github.com/dgrijalva/jwt-go"
-	 "github.com/open-networks/go-msgraph"
-	 _ "io/ioutil"
-	 "net/http"
-	 "os"
-	 "strconv"
-	 "strings"
-	 "sync"
-	 "time"
-	 "unicode/utf8"
+	"context"
+	"fmt"
+	_ "io/ioutil"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+	"unicode/utf8"
+
+	"github.com/dgrijalva/jwt-go"
+	"github.com/open-networks/go-msgraph"
 )
 
 var HandlerRegisterer = registerer("krakend-azure-plugin")
 
 type GroupMapping struct {
 	sync.RWMutex
-	groupMapping map[string]string
+	groupMapping   map[string]string
 	queriedTenants map[string]time.Time
 }
 
 var groupMapping = &GroupMapping{}
 
 type registerer string
+
 var clientId string
 var clientSecret string
 var jwtHeaderName string
 var jwtValuePrefix string
 var groupUpdateIntervalMinutes float64
 var groupTransformDisable string
-
 
 func (r registerer) RegisterHandlers(f func(
 	name string,
@@ -44,13 +45,13 @@ func (r registerer) RegisterHandlers(f func(
 	f(string(r), r.registerHandlers)
 }
 
-func (r registerer) registerHandlers(ctx context.Context, extra map[string]interface{}, handler http.Handler) (http.Handler, error) {	
+func (r registerer) registerHandlers(ctx context.Context, extra map[string]interface{}, handler http.Handler) (http.Handler, error) {
 
-	handlerFunc :=  http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	handlerFunc := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		jwtToken := req.Header.Get(jwtHeaderName)
 
 		if jwtToken != "" {
-			
+
 			jwtToken = strings.ReplaceAll(jwtToken, " ", "")
 			jwtToken = jwtToken[utf8.RuneCountInString(jwtValuePrefix):]
 
@@ -74,7 +75,7 @@ func (r registerer) registerHandlers(ctx context.Context, extra map[string]inter
 						}
 					}
 				}
-				
+
 				if groupTransformDisable != "true" {
 
 					groupMapping.Lock()
@@ -86,8 +87,7 @@ func (r registerer) registerHandlers(ctx context.Context, extra map[string]inter
 						}
 					}
 					groupMapping.Unlock()
-			
-			
+
 					groupMapping.RLock()
 					if claims["groups"] != nil {
 						for _, g := range claims["groups"].([]interface{}) {
@@ -104,18 +104,22 @@ func (r registerer) registerHandlers(ctx context.Context, extra map[string]inter
 
 				}
 
-				req.Header.Add("x-tenant-id", strings.ReplaceAll(claims["tid"].(string), "-", "_") )
+				req.Header.Add("x-tenant-id", strings.ReplaceAll(claims["tid"].(string), "-", "_"))
 
 				if groupsValue != "" {
 					req.Header.Add("x-auth-user-groups", groupsValue)
+				} else {
+					req.Header.Add("x-auth-user-groups", "")
 				}
 
 				if rolesValue != "" {
 					req.Header.Add("x-auth-user-roles", rolesValue)
+				} else {
+					req.Header.Add("x-auth-user-roles", "")
 				}
-		
+
 				var userIdentification string
-		
+
 				if claims["email"] != nil {
 					userIdentification = claims["email"].(string)
 				} else if claims["verified_primary_email"] != nil {
@@ -127,7 +131,7 @@ func (r registerer) registerHandlers(ctx context.Context, extra map[string]inter
 				} else {
 					userIdentification = "unknown"
 				}
-		
+
 				req.Header.Add("from", userIdentification)
 
 			}
@@ -151,8 +155,8 @@ func updateTenantGroups(tenantId string) {
 
 	groups, err := graphClient.ListGroups()
 
-	if err != nil  {
-		fmt.Fprintf(os.Stderr,"ERROR: unable to resolve groups (error: %v) for tenant: %s \n", err, tenantId)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: unable to resolve groups (error: %v) for tenant: %s \n", err, tenantId)
 		return
 	}
 
@@ -173,35 +177,34 @@ func init() {
 	groupUpdate := os.Getenv("AZURE_KRAKEND_PLUGIN_GROUP_UPDATE_IN_MINUTES")
 	groupTransformDisable = os.Getenv("AZURE_KRAKEND_PLUGIN_GROUP_DISABLE")
 
-
 	if jwtHeaderName == "" {
 		jwtHeaderName = "Authorization"
-		fmt.Fprintf(os.Stdout,"WARN: no JWT header name set, using default: %s \n", jwtHeaderName)
+		fmt.Fprintf(os.Stdout, "WARN: no JWT header name set, using default: %s \n", jwtHeaderName)
 	}
 
 	if groupUpdate == "" {
 		groupUpdateIntervalMinutes = 120
-		fmt.Fprintf(os.Stdout,"WARN: no Azure group update interval set, using default: %v minutes \n", groupUpdateIntervalMinutes)
+		fmt.Fprintf(os.Stdout, "WARN: no Azure group update interval set, using default: %v minutes \n", groupUpdateIntervalMinutes)
 	} else {
 		var err error
 		groupUpdateIntervalMinutes, err = strconv.ParseFloat(groupUpdate, 64)
 
-		if err != nil  {
+		if err != nil {
 			groupUpdateIntervalMinutes = 120
-			fmt.Fprintf(os.Stderr,"ERROR: unable to convert group refresh interval, using default: %v minutes \n", groupUpdateIntervalMinutes)
+			fmt.Fprintf(os.Stderr, "ERROR: unable to convert group refresh interval, using default: %v minutes \n", groupUpdateIntervalMinutes)
 		}
 	}
 
 	if groupTransformDisable != "true" {
 
 		if clientId == "" || clientSecret == "" {
-			fmt.Fprintf(os.Stderr,"ERROR: Unable to retrieve plugin credentials: AZURE_KRAKEND_PLUGIN_CLIENT_ID or AZURE_KRAKEND_PLUGIN_CLIENT_SECRET missing \n")
+			fmt.Fprintf(os.Stderr, "ERROR: Unable to retrieve plugin credentials: AZURE_KRAKEND_PLUGIN_CLIENT_ID or AZURE_KRAKEND_PLUGIN_CLIENT_SECRET missing \n")
 		} else {
-			fmt.Fprintf(os.Stdout,"INFO: azure-groups-plugin loaded successfully (JWT header name is \"%s\" and group refresh interval %v minutes ) \n", jwtHeaderName, groupUpdateIntervalMinutes)
+			fmt.Fprintf(os.Stdout, "INFO: azure-groups-plugin loaded successfully (JWT header name is \"%s\" and group refresh interval %v minutes ) \n", jwtHeaderName, groupUpdateIntervalMinutes)
 		}
 
 	} else {
-		fmt.Fprintf(os.Stdout,"INFO: group transformation is disabled")
+		fmt.Fprintf(os.Stdout, "INFO: group transformation is disabled")
 	}
 }
 
